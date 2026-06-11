@@ -1,0 +1,84 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 1,
+        "name": "Порт Актау",
+        "type": "sea",
+        "capacity_per_hour": 120,
+        "note": "Единственный морской порт Казахстана на Каспии"
+      },
+      "geometry": { "type": "Point", "coordinates": [51.1722, 43.6529] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 2,
+        "name": "КПП Карабогаз",
+        "type": "land",
+        "capacity_per_hour": 40,
+        "note": "Граница с Туркменистаном, основной южный КПП"
+      },
+      "geometry": { "type": "Point", "coordinates": [52.584, 41.476] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 3,
+        "name": "КПП Тажен",
+        "type": "land",
+        "capacity_per_hour": 30,
+        "note": "Граница с Туркменистаном"
+      },
+      "geometry": { "type": "Point", "coordinates": [53.1, 41.61] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 4,
+        "name": "Ж/д ст. Мангышлак",
+        "type": "rail",
+        "capacity_per_hour": 15,
+        "note": "Основная ж/д станция региона"
+      },
+      "geometry": { "type": "Point", "coordinates": [51.23, 43.79] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 5,
+        "name": "Ж/д ст. Опорная",
+        "type": "rail",
+        "capacity_per_hour": 10,
+        "note": "Сортировочная станция у порта"
+      },
+      "geometry": { "type": "Point", "coordinates": [51.08, 43.64] }
+    }
+  ],
+  "routes": [
+    {
+      "id": "aktau-karabogaz",
+      "name": "Актау - КПП Карабогаз - Туркменбаши",
+      "mode": "truck",
+      "distance_km": 350,
+      "path": [[51.1722, 43.6529], [51.64, 43.35], [52.1, 42.46], [52.584, 41.476]]
+    },
+    {
+      "id": "aktau-tazhen",
+      "name": "Актау - КПП Тажен - Ашхабад",
+      "mode": "truck",
+      "distance_km": 410,
+      "path": [[51.1722, 43.6529], [51.85, 43.11], [52.57, 42.15], [53.1, 41.61]]
+    },
+    {
+      "id": "port-mangyshlak",
+      "name": "Порт Актау - Мангышлак - ТМТМ",
+      "mode": "rail",
+      "distance_km": 24,
+      "path": [[51.1722, 43.6529], [51.2, 43.7], [51.23, 43.79]]
+    }
+  ]
+}
+

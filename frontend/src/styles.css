@@ -239,6 +239,9 @@ h2 {
 .checkpoint-marker {
   display: grid;
   place-items: center;
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0 !important;
   border: 2px solid #fff;
   border-radius: 50%;
   color: #fff;

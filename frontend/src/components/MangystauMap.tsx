@@ -43,9 +43,9 @@ export function MangystauMap({
             key={route.id}
             pathOptions={{
               color: route.mode === 'rail' ? '#5b5f97' : '#0f8b8d',
-              weight: route.mode === 'rail' ? 4 : 5,
+              weight: route.mode === 'rail' ? 3 : 4,
               dashArray: route.mode === 'rail' ? '8 8' : undefined,
-              opacity: 0.78,
+              opacity: 0.68,
             }}
             positions={route.path}
           />

@@ -8,7 +8,13 @@ interface Message {
   text: string;
 }
 
-const QUICK = ['Какой КПП сейчас свободнее?', 'Сколько ждать на Карабогазе?', 'Когда лучше ехать сегодня?'];
+const QUICK = [
+  'Какой КПП сейчас свободнее?',
+  'Сколько ждать на Карабогазе?',
+  'Когда лучше ехать сегодня?',
+  'Есть ли перегрузка?',
+  'Какой маршрут выбрать?',
+];
 
 function localCheckpointReply(checkpoints: Checkpoint[]) {
   const land = checkpoints.filter((checkpoint) => checkpoint.type === 'land');
@@ -97,17 +103,36 @@ export function DriverChatbot() {
       </div>
 
       <div className="flex-1 space-y-2 overflow-y-auto p-3">
-        {msgs.map((message, index) => (
-          <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
-                message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              {message.text}
+        {msgs.map((message, index) => {
+          const showSuggestions = message.role === 'bot' && index === msgs.length - 1 && !loading;
+          return (
+            <div key={`${message.role}-${index}`} className="space-y-2">
+              <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                    message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {message.text}
+                </div>
+              </div>
+              {showSuggestions && (
+                <div className="flex flex-wrap gap-1.5 pl-1">
+                  {QUICK.map((question) => (
+                    <button
+                      key={question}
+                      type="button"
+                      onClick={() => send(question)}
+                      className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50"
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
         {loading && (
           <div className="flex justify-start">
             <div className="inline-flex items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-500">
@@ -118,21 +143,6 @@ export function DriverChatbot() {
         )}
         <div ref={endRef} />
       </div>
-
-      {msgs.length <= 1 && (
-        <div className="flex flex-wrap gap-1.5 px-3 pb-2">
-          {QUICK.map((question) => (
-            <button
-              key={question}
-              type="button"
-              onClick={() => send(question)}
-              className="rounded-full border border-blue-200 px-2.5 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50"
-            >
-              {question}
-            </button>
-          ))}
-        </div>
-      )}
 
       <div className="flex gap-2 border-t border-gray-100 p-3">
         <input

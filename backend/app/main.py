@@ -162,9 +162,11 @@ def checkpoint_context(checkpoints: list[dict]) -> str:
     )
 
 
-def fallback_chat_reply(message: str, checkpoints: list[dict]) -> str:
-    text = message.lower()
-    target = None
+def load_pct(row: dict) -> int:
+    return round(row["current_queue"] / max(row["capacity_per_hour"], 1) * 100)
+
+
+def find_checkpoint_by_message(message: str, checkpoints: list[dict]) -> dict | None:
     aliases = {
         "карабогаз": "Карабогаз",
         "karabogaz": "Карабогаз",
@@ -175,9 +177,72 @@ def fallback_chat_reply(message: str, checkpoints: list[dict]) -> str:
         "актау": "Актау",
     }
     for alias, needle in aliases.items():
-        if alias in text:
-            target = next((row for row in checkpoints if needle in row["name"]), None)
-            break
+        if alias in message:
+            return next((row for row in checkpoints if needle in row["name"]), None)
+    return None
+
+
+def exact_chat_reply(message: str, checkpoints: list[dict]) -> str | None:
+    text = message.lower()
+    land_points = [row for row in checkpoints if row["type"] == "land"]
+    candidates = land_points or checkpoints
+
+    if any(word in text for word in ("перегруз", "загруж", "критич", "нагруз")):
+        overloaded = [row for row in checkpoints if row["current_queue"] / max(row["capacity_per_hour"], 1) >= 0.8]
+        if not overloaded:
+            avg_wait = round(sum(row["wait_minutes"] for row in checkpoints) / max(len(checkpoints), 1))
+            return f"Перегрузки нет. Среднее ожидание по точкам — {avg_wait} мин, все КПП ниже порога 80% загрузки."
+        details = "; ".join(
+            f"{row['name']} — {load_pct(row)}%, очередь {row['current_queue']} авто, ожидание {row['wait_minutes']} мин"
+            for row in sorted(overloaded, key=lambda item: load_pct(item), reverse=True)
+        )
+        return f"Да, перегрузка есть: {details}. Порог перегрузки — 80% от пропускной способности."
+
+    target = find_checkpoint_by_message(text, checkpoints)
+    if target and any(word in text for word in ("сколько", "ждать", "ожид", "очеред")):
+        return (
+            f"{target['name']}: очередь {target['current_queue']} авто, ожидание {target['wait_minutes']} мин, "
+            f"загрузка {load_pct(target)}%, статус {target['status']}."
+        )
+
+    if any(word in text for word in ("когда", "время", "ехать")):
+        best = min(candidates, key=lambda row: (row["wait_minutes"], row["current_queue"]))
+        if best["wait_minutes"] < 60:
+            return (
+                f"Лучше ехать сейчас через {best['name']}: ожидание {best['wait_minutes']} мин, "
+                f"очередь {best['current_queue']} авто."
+            )
+        recommended_time = (datetime.now() + timedelta(minutes=best["wait_minutes"])).strftime("%H:%M")
+        return (
+            f"Лучше планировать въезд после {recommended_time} через {best['name']}. "
+            f"Сейчас там ожидание {best['wait_minutes']} мин и очередь {best['current_queue']} авто."
+        )
+
+    if any(word in text for word in ("свобод", "лучше", "оптим")):
+        best = min(candidates, key=lambda row: (row["wait_minutes"], row["current_queue"]))
+        return (
+            f"Сейчас свободнее всего {best['name']}: ожидание {best['wait_minutes']} мин, "
+            f"очередь {best['current_queue']} авто, загрузка {load_pct(best)}%."
+        )
+
+    if "маршрут" in text:
+        best = min(candidates, key=lambda row: (row["wait_minutes"], row["current_queue"]))
+        route_name = "Актау - КПП Тажен - Ашхабад" if "Тажен" in best["name"] else "Актау - КПП Карабогаз - Туркменбаши"
+        return (
+            f"Выбирайте маршрут {route_name}. Сейчас контрольная точка {best['name']}: "
+            f"{best['wait_minutes']} мин ожидания, очередь {best['current_queue']} авто, загрузка {load_pct(best)}%."
+        )
+
+    return None
+
+
+def fallback_chat_reply(message: str, checkpoints: list[dict]) -> str:
+    text = message.lower()
+    exact = exact_chat_reply(text, checkpoints)
+    if exact:
+        return exact
+
+    target = find_checkpoint_by_message(text, checkpoints)
 
     if target is None:
         candidates = [row for row in checkpoints if row["type"] == "land"] or checkpoints
@@ -310,6 +375,10 @@ async def chatbot_health() -> dict:
 @app.post("/api/chatbot")
 async def chat(req: ChatRequest) -> ChatResponse:
     checkpoints = current_checkpoints()
+    exact_reply = exact_chat_reply(req.message, checkpoints)
+    if exact_reply:
+        return ChatResponse(reply=exact_reply, provider="heuristic")
+
     try:
         gemini_reply = await gemini_chat_reply(req.message, checkpoints)
         if gemini_reply:

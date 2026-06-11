@@ -16,15 +16,78 @@ const QUICK = [
   'Какой маршрут выбрать?',
 ];
 
-function localCheckpointReply(checkpoints: Checkpoint[]) {
+function loadPct(checkpoint: Checkpoint) {
+  return Math.round((checkpoint.current_queue / Math.max(checkpoint.capacity_per_hour, 1)) * 100);
+}
+
+function findCheckpoint(question: string, checkpoints: Checkpoint[]) {
+  const aliases = [
+    ['карабогаз', 'Карабогаз'],
+    ['karabogaz', 'Карабогаз'],
+    ['тажен', 'Тажен'],
+    ['tazhen', 'Тажен'],
+    ['порт', 'Порт'],
+    ['актау', 'Актау'],
+    ['aktau', 'Актау'],
+  ];
+  const text = question.toLowerCase();
+  const match = aliases.find(([alias]) => text.includes(alias));
+  if (!match) return undefined;
+  return checkpoints.find((checkpoint) => checkpoint.name.includes(match[1]));
+}
+
+function localCheckpointReply(question: string, checkpoints: Checkpoint[]) {
+  const text = question.toLowerCase();
   const land = checkpoints.filter((checkpoint) => checkpoint.type === 'land');
   const candidates = land.length > 0 ? land : checkpoints;
-  const best = [...candidates].sort((a, b) => a.wait_minutes - b.wait_minutes || a.current_queue - b.current_queue)[0];
-  if (!best) {
+  if (checkpoints.length === 0) {
     return 'API чата временно недоступен, и данные КПП не загрузились. Проверьте backend-деплой и переменную VITE_API_URL.';
   }
+
+  if (text.includes('перегруз') || text.includes('загруж') || text.includes('нагруз')) {
+    const overloaded = checkpoints
+      .filter((checkpoint) => checkpoint.current_queue / Math.max(checkpoint.capacity_per_hour, 1) >= 0.8)
+      .sort((a, b) => loadPct(b) - loadPct(a));
+    if (overloaded.length === 0) {
+      const avgWait = Math.round(checkpoints.reduce((sum, checkpoint) => sum + checkpoint.wait_minutes, 0) / checkpoints.length);
+      return `Перегрузки нет. Среднее ожидание по точкам — ${avgWait} мин, все КПП ниже порога 80% загрузки.`;
+    }
+    return `Да, перегрузка есть: ${overloaded
+      .map(
+        (checkpoint) =>
+          `${checkpoint.name} — ${loadPct(checkpoint)}%, очередь ${checkpoint.current_queue} авто, ожидание ${checkpoint.wait_minutes} мин`,
+      )
+      .join('; ')}.`;
+  }
+
+  const target = findCheckpoint(text, checkpoints);
+  if (target && (text.includes('сколько') || text.includes('ждать') || text.includes('очеред'))) {
+    return `${target.name}: очередь ${target.current_queue} авто, ожидание ${target.wait_minutes} мин, загрузка ${loadPct(target)}%, статус ${target.status}.`;
+  }
+
+  const best = [...candidates].sort((a, b) => a.wait_minutes - b.wait_minutes || a.current_queue - b.current_queue)[0];
+  if (!best) {
+    return 'Данные КПП временно недоступны.';
+  }
+
+  if (text.includes('когда') || text.includes('ехать') || text.includes('время')) {
+    if (best.wait_minutes < 60) {
+      return `Лучше ехать сейчас через ${best.name}: ожидание ${best.wait_minutes} мин, очередь ${best.current_queue} авто.`;
+    }
+    const recommendedTime = new Date(Date.now() + best.wait_minutes * 60000).toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    return `Лучше планировать въезд после ${recommendedTime} через ${best.name}. Сейчас там ожидание ${best.wait_minutes} мин и очередь ${best.current_queue} авто.`;
+  }
+
+  if (text.includes('маршрут')) {
+    const routeName = best.name.includes('Тажен') ? 'Актау - КПП Тажен - Ашхабад' : 'Актау - КПП Карабогаз - Туркменбаши';
+    return `Выбирайте маршрут ${routeName}. Сейчас контрольная точка ${best.name}: ${best.wait_minutes} мин ожидания, очередь ${best.current_queue} авто, загрузка ${loadPct(best)}%.`;
+  }
+
   const action = best.wait_minutes < 60 ? 'можно ехать сейчас' : 'лучше выезжать позже, когда очередь спадет';
-  return `AI временно недоступен, показываю расчет по live-данным: оптимально через ${best.name}. Очередь ${best.current_queue} авто, ожидание около ${best.wait_minutes} мин — ${action}.`;
+  return `По live-данным оптимально через ${best.name}. Очередь ${best.current_queue} авто, ожидание около ${best.wait_minutes} мин — ${action}.`;
 }
 
 export function DriverChatbot() {
@@ -53,7 +116,7 @@ export function DriverChatbot() {
       console.error(err);
       try {
         const checkpoints = await api.checkpoints();
-        setMsgs((items) => [...items, { role: 'bot', text: localCheckpointReply(checkpoints) }]);
+        setMsgs((items) => [...items, { role: 'bot', text: localCheckpointReply(q, checkpoints) }]);
       } catch {
         setMsgs((items) => [
           ...items,

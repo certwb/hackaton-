@@ -241,7 +241,8 @@ h2 {
   place-items: center;
   width: 18px !important;
   height: 18px !important;
-  margin: 0 !important;
+  margin-left: -9px !important;
+  margin-top: -9px !important;
   border: 2px solid #fff;
   border-radius: 50%;
   color: #fff;

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, datetime
+import os
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
+import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -26,7 +29,12 @@ from app.services.ai_forecast import ai_card_forecast, forecast_checkpoint
 from app.services.simulator import simulate_realtime
 
 
-FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+load_dotenv(BACKEND_ROOT / ".env")
+load_dotenv(PROJECT_ROOT / ".env")
+
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
 app = FastAPI(
     title="Mangystau Logistics MVP",
@@ -65,7 +73,22 @@ class FreightRequestIn(BaseModel):
         return self
 
 
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=500)
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    provider: Literal["anthropic", "gemini", "heuristic"]
+
+
 FREIGHT_REQUESTS: list[dict] = []
+DELETED_ROUTE_IDS: set[str] = set()
+
+
+CHAT_SYSTEM = """Ты — помощник водителя-дальнобойщика для маршрутов через
+Мангистаускую область Казахстана. Отвечай кратко, на русском языке,
+используй текущие данные КПП и советуй конкретный пункт пропуска."""
 
 
 @app.on_event("startup")
@@ -77,6 +100,13 @@ def parse_period(period: str) -> int:
     if period.endswith("d") and period[:-1].isdigit():
         return max(1, min(90, int(period[:-1])))
     return 30
+
+
+def visible_routes(mode: Literal["truck", "rail", "all"] = "all") -> list[dict]:
+    routes = [route for route in ROUTES if route["id"] not in DELETED_ROUTE_IDS]
+    if mode == "all":
+        return routes
+    return [route for route in routes if route["mode"] == mode]
 
 
 def summarize_metrics(rows: list[dict]) -> dict:
@@ -99,12 +129,14 @@ def route_recommendation(cargo_type: str, delivery_loc: str) -> dict:
     checkpoints = current_checkpoints()
     land_points = [row for row in checkpoints if row["type"] == "land"]
     best_land = min(land_points, key=lambda row: (row["wait_minutes"], row["current_queue"]))
-    route = ROUTES[1] if best_land["id"] == 3 else ROUTES[0]
+    preferred_route_id = "aktau-tazhen" if best_land["id"] == 3 else "aktau-karabogaz"
+    route = next((item for item in visible_routes("truck") if item["id"] == preferred_route_id), None)
+    route = route or next(iter(visible_routes("truck")), None)
     return {
         "checkpoint_id": best_land["id"],
         "checkpoint_name": best_land["name"],
-        "route_name": route["name"],
-        "distance_km": route["distance_km"],
+        "route_name": route["name"] if route else "Маршрут не выбран",
+        "distance_km": route["distance_km"] if route else 0,
         "current_queue": best_land["current_queue"],
         "wait_minutes": best_land["wait_minutes"],
         "reason": f"Для груза '{cargo_type}' в направлении {delivery_loc} сейчас меньше ожидание через {best_land['name']}.",
@@ -118,6 +150,98 @@ def carrier_matches(cargo_type: str) -> list[dict]:
         return carrier["rating"] + spec_bonus + capacity_bonus
 
     return sorted((carrier for carrier in CARRIERS if carrier["active"]), key=score, reverse=True)[:3]
+
+
+def checkpoint_context(checkpoints: list[dict]) -> str:
+    return "\n".join(
+        (
+            f"- {row['name']} ({row['type']}): очередь {row['current_queue']} авто, "
+            f"ожидание {row['wait_minutes']} мин, статус: {row['status']}"
+        )
+        for row in checkpoints
+    )
+
+
+def fallback_chat_reply(message: str, checkpoints: list[dict]) -> str:
+    text = message.lower()
+    target = None
+    aliases = {
+        "карабогаз": "Карабогаз",
+        "karabogaz": "Карабогаз",
+        "тажен": "Тажен",
+        "tazhen": "Тажен",
+        "порт": "Порт",
+        "aktau": "Актау",
+        "актау": "Актау",
+    }
+    for alias, needle in aliases.items():
+        if alias in text:
+            target = next((row for row in checkpoints if needle in row["name"]), None)
+            break
+
+    if target is None:
+        candidates = [row for row in checkpoints if row["type"] == "land"] or checkpoints
+        target = min(candidates, key=lambda row: (row["wait_minutes"], row["current_queue"]))
+
+    if target["wait_minutes"] < 60:
+        action = "можно ехать сейчас"
+    else:
+        action = "лучше выезжать позже, когда очередь спадет"
+    return (
+        f"Сейчас оптимальный вариант: {target['name']}. "
+        f"Очередь {target['current_queue']} авто, ожидание около {target['wait_minutes']} мин — {action}."
+    )
+
+
+async def gemini_chat_reply(message: str, checkpoints: list[dict]) -> str | None:
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return None
+
+    configured = os.getenv("GEMINI_MODELS") or os.getenv("GEMINI_MODEL") or ""
+    models = [item.strip().removeprefix("models/") for item in configured.split(",") if item.strip()]
+    models.extend(["gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash-lite"])
+    models = list(dict.fromkeys(models))
+
+    payload = {
+        "systemInstruction": {
+            "parts": [
+                {
+                    "text": f"{CHAT_SYSTEM}\n\nТекущее состояние КПП:\n{checkpoint_context(checkpoints)}",
+                }
+            ]
+        },
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": message}],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.35,
+            "maxOutputTokens": 300,
+        },
+    }
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        for model in models:
+            try:
+                response = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    params={"key": api_key},
+                    json=payload,
+                )
+                if response.status_code in {429, 503}:
+                    continue
+                response.raise_for_status()
+                data = response.json()
+                parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                text = "".join(part.get("text", "") for part in parts).strip()
+                if text:
+                    return text
+            except Exception:
+                continue
+    return None
 
 
 @app.get("/")
@@ -171,6 +295,56 @@ async def post_ai_forecast(checkpoint_id: int) -> dict:
         current_queue=current["current_queue"],
         wait_minutes=current["wait_minutes"],
     )
+
+
+@app.get("/api/chatbot/health")
+async def chatbot_health() -> dict:
+    return {
+        "ok": True,
+        "gemini_configured": bool(os.getenv("GEMINI_API_KEY")),
+        "anthropic_configured": bool(os.getenv("ANTHROPIC_API_KEY")),
+        "gemini_model": os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest"),
+    }
+
+
+@app.post("/api/chatbot")
+async def chat(req: ChatRequest) -> ChatResponse:
+    checkpoints = current_checkpoints()
+    try:
+        gemini_reply = await gemini_chat_reply(req.message, checkpoints)
+        if gemini_reply:
+            return ChatResponse(reply=gemini_reply, provider="gemini")
+    except Exception:
+        pass
+
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        return ChatResponse(reply=fallback_chat_reply(req.message, checkpoints), provider="heuristic")
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01",
+                },
+                json={
+                    "model": os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest"),
+                    "max_tokens": 300,
+                    "system": f"{CHAT_SYSTEM}\n\nТекущее состояние КПП:\n{checkpoint_context(checkpoints)}",
+                    "messages": [{"role": "user", "content": req.message}],
+                },
+            )
+        response.raise_for_status()
+        content = response.json().get("content", [])
+        text = content[0].get("text") if content else None
+        if text:
+            return ChatResponse(reply=text, provider="anthropic")
+    except Exception:
+        return ChatResponse(reply=fallback_chat_reply(req.message, checkpoints), provider="heuristic")
+
+    return ChatResponse(reply=fallback_chat_reply(req.message, checkpoints), provider="heuristic")
 
 
 @app.get("/api/port/metrics")
@@ -285,6 +459,39 @@ async def get_dashboard() -> dict:
     }
 
 
+@app.get("/api/analytics/kpi")
+async def get_kpi() -> dict:
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())
+    last_week_start = week_start - timedelta(days=7)
+    rows = port_metrics(14)
+    checkpoints = current_checkpoints()
+
+    this_week = 0.0
+    last_week = 0.0
+    for row in rows:
+        recorded_date = date.fromisoformat(row["recorded_date"])
+        if recorded_date >= week_start:
+            this_week += row["cargo_volume_tons"]
+        elif last_week_start <= recorded_date < week_start:
+            last_week += row["cargo_volume_tons"]
+
+    baseline = last_week or 1
+    growth_pct = round((this_week - baseline) / baseline * 100, 1)
+    avg_wait = round(sum(row["wait_minutes"] for row in checkpoints) / max(len(checkpoints), 1))
+
+    return {
+        "cargo_this_week_tons": round(this_week),
+        "active_shipments": len(shipments("in_transit")) + len(shipments("at_checkpoint")),
+        "avg_wait_minutes": avg_wait,
+        "week_growth_pct": growth_pct,
+        "active_checkpoints": len([row for row in checkpoints if row["status"] in {"open", "busy", "critical"}]),
+        "overloaded_checkpoints": len(
+            [row for row in checkpoints if row["current_queue"] / max(row["capacity_per_hour"], 1) >= 0.8]
+        ),
+    }
+
+
 @app.get("/api/analytics/heatmap")
 async def get_heatmap() -> list[dict]:
     return [
@@ -303,9 +510,19 @@ async def get_heatmap() -> list[dict]:
 
 @app.get("/api/routes")
 async def get_routes(mode: Literal["truck", "rail", "all"] = "all") -> list[dict]:
-    if mode == "all":
-        return ROUTES
-    return [route for route in ROUTES if route["mode"] == mode]
+    return visible_routes(mode)
+
+
+@app.delete("/api/routes/{route_id}")
+async def delete_route(route_id: str) -> dict:
+    route = next((item for item in ROUTES if item["id"] == route_id), None)
+    if route is None:
+        raise HTTPException(status_code=404, detail="Route not found")
+    DELETED_ROUTE_IDS.add(route_id)
+    return {
+        "deleted": route_id,
+        "routes": visible_routes("all"),
+    }
 
 
 @app.websocket("/ws/checkpoints")

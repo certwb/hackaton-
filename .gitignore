@@ -5,6 +5,6 @@ __pycache__/
 node_modules/
 dist/
 .vite/
+frontend/hackaton-/
 .DS_Store
 *.log
-

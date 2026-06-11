@@ -2,6 +2,7 @@ frontend/node_modules
 frontend/dist
 frontend/.vite
 frontend/*.log
+frontend/hackaton-
 backend/app/**/__pycache__
 backend/*.log
 .venv

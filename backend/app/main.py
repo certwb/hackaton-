@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, datetime
+from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 
@@ -22,6 +25,8 @@ from app.data.seed import (
 from app.services.ai_forecast import ai_card_forecast, forecast_checkpoint
 from app.services.simulator import simulate_realtime
 
+
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 app = FastAPI(
     title="Mangystau Logistics MVP",
@@ -116,7 +121,10 @@ def carrier_matches(cargo_type: str) -> list[dict]:
 
 
 @app.get("/")
-async def root() -> dict:
+async def root():
+    index_file = FRONTEND_DIST / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
     return {"ok": True, "service": "Mangystau Logistics API", "docs": "/docs"}
 
 
@@ -309,3 +317,7 @@ async def checkpoints_ws(websocket: WebSocket) -> None:
             await asyncio.sleep(3)
     except WebSocketDisconnect:
         return
+
+
+if FRONTEND_DIST.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="frontend")

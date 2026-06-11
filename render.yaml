@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: mangystau-logistics
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/checkpoints
+    envVars:
+      - key: AI_PROVIDER
+        value: heuristic

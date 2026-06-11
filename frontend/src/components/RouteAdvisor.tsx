@@ -21,11 +21,13 @@ export function RouteAdvisor() {
     setLoading(true);
     try {
       const checkpoints = await api.checkpoints();
-      const relevant = checkpoints
-        .filter((checkpoint) => {
-          if (to.includes('ТМ') || to.includes('УЗ')) return checkpoint.type === 'land';
-          return checkpoint.type !== 'rail';
-        })
+      const relevant = checkpoints.filter((checkpoint) => {
+        if (to.includes('ТМ')) return checkpoint.name.includes('Карабогаз') || checkpoint.name.includes('Темир');
+        if (to.includes('УЗ')) return checkpoint.name.includes('Тажен');
+        return checkpoint.type !== 'rail';
+      });
+      const options = relevant.length > 0 ? relevant : checkpoints.filter((checkpoint) => checkpoint.type === 'land');
+      const advised = options
         .sort((a, b) => a.wait_minutes - b.wait_minutes)
         .slice(0, 2)
         .map((checkpoint) => ({
@@ -38,7 +40,7 @@ export function RouteAdvisor() {
                   minute: '2-digit',
                 })} — нагрузка снизится`,
         }));
-      setResult(relevant);
+      setResult(advised);
     } finally {
       setLoading(false);
     }

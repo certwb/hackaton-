@@ -33,7 +33,7 @@ export function MangystauMap({
 }) {
   return (
     <section className="map-shell" aria-label="Карта логистики Мангистау">
-      <MapContainer center={[42.72, 52.06]} zoom={7} minZoom={6} scrollWheelZoom>
+      <MapContainer center={[43.35, 53.55]} zoom={6} minZoom={5} scrollWheelZoom>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

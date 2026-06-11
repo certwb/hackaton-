@@ -36,10 +36,23 @@ function findCheckpoint(question: string, checkpoints: Checkpoint[]) {
   return checkpoints.find((checkpoint) => checkpoint.name.includes(match[1]));
 }
 
-function localCheckpointReply(question: string, checkpoints: Checkpoint[]) {
+function checkpointCandidates(question: string, checkpoints: Checkpoint[]) {
   const text = question.toLowerCase();
   const land = checkpoints.filter((checkpoint) => checkpoint.type === 'land');
-  const candidates = land.length > 0 ? land : checkpoints;
+  if (text.includes('ашхабад') || text.includes('туркмен') || text.includes('туркменбаш') || text.includes('тм')) {
+    const tm = land.filter((checkpoint) => checkpoint.name.includes('Карабогаз') || checkpoint.name.includes('Темир'));
+    return tm.length > 0 ? tm : land;
+  }
+  if (text.includes('ташкент') || text.includes('узбек') || text.includes('узб') || text.includes('даут') || text.includes('каракалпак')) {
+    const uz = land.filter((checkpoint) => checkpoint.name.includes('Тажен'));
+    return uz.length > 0 ? uz : land;
+  }
+  return land.length > 0 ? land : checkpoints;
+}
+
+function localCheckpointReply(question: string, checkpoints: Checkpoint[]) {
+  const text = question.toLowerCase();
+  const candidates = checkpointCandidates(question, checkpoints);
   if (checkpoints.length === 0) {
     return 'API чата временно недоступен, и данные КПП не загрузились. Проверьте backend-деплой и переменную VITE_API_URL.';
   }
@@ -82,7 +95,7 @@ function localCheckpointReply(question: string, checkpoints: Checkpoint[]) {
   }
 
   if (text.includes('маршрут')) {
-    const routeName = best.name.includes('Тажен') ? 'Актау - КПП Тажен - Ашхабад' : 'Актау - КПП Карабогаз - Туркменбаши';
+    const routeName = best.name.includes('Тажен') ? 'Актау - Бейнеу - КПП Тажен - Даут-Ата' : 'Актау - КПП Карабогаз - Туркменбаши';
     return `Выбирайте маршрут ${routeName}. Сейчас контрольная точка ${best.name}: ${best.wait_minutes} мин ожидания, очередь ${best.current_queue} авто, загрузка ${loadPct(best)}%.`;
   }
 

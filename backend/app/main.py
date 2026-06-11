@@ -127,8 +127,8 @@ def summarize_metrics(rows: list[dict]) -> dict:
 
 def route_recommendation(cargo_type: str, delivery_loc: str) -> dict:
     checkpoints = current_checkpoints()
-    land_points = [row for row in checkpoints if row["type"] == "land"]
-    best_land = min(land_points, key=lambda row: (row["wait_minutes"], row["current_queue"]))
+    candidates = checkpoint_candidates_for_destination(delivery_loc, checkpoints)
+    best_land = min(candidates, key=lambda row: (row["wait_minutes"], row["current_queue"]))
     preferred_route_id = "aktau-tazhen" if best_land["id"] == 3 else "aktau-karabogaz"
     route = next((item for item in visible_routes("truck") if item["id"] == preferred_route_id), None)
     route = route or next(iter(visible_routes("truck")), None)
@@ -166,6 +166,18 @@ def load_pct(row: dict) -> int:
     return round(row["current_queue"] / max(row["capacity_per_hour"], 1) * 100)
 
 
+def checkpoint_candidates_for_destination(text: str, checkpoints: list[dict]) -> list[dict]:
+    lower = text.lower()
+    land_points = [row for row in checkpoints if row["type"] == "land"]
+    if any(word in lower for word in ("ашхабад", "туркмен", "туркменбаши", "тм")):
+        tm_points = [row for row in land_points if "Карабогаз" in row["name"] or "Темир" in row["name"]]
+        return tm_points or land_points or checkpoints
+    if any(word in lower for word in ("ташкент", "узбек", "узб", "даут", "каракалпак")):
+        uz_points = [row for row in land_points if "Тажен" in row["name"]]
+        return uz_points or land_points or checkpoints
+    return land_points or checkpoints
+
+
 def find_checkpoint_by_message(message: str, checkpoints: list[dict]) -> dict | None:
     aliases = {
         "карабогаз": "Карабогаз",
@@ -184,8 +196,7 @@ def find_checkpoint_by_message(message: str, checkpoints: list[dict]) -> dict | 
 
 def exact_chat_reply(message: str, checkpoints: list[dict]) -> str | None:
     text = message.lower()
-    land_points = [row for row in checkpoints if row["type"] == "land"]
-    candidates = land_points or checkpoints
+    candidates = checkpoint_candidates_for_destination(text, checkpoints)
 
     if any(word in text for word in ("перегруз", "загруж", "критич", "нагруз")):
         overloaded = [row for row in checkpoints if row["current_queue"] / max(row["capacity_per_hour"], 1) >= 0.8]
@@ -227,7 +238,7 @@ def exact_chat_reply(message: str, checkpoints: list[dict]) -> str | None:
 
     if "маршрут" in text:
         best = min(candidates, key=lambda row: (row["wait_minutes"], row["current_queue"]))
-        route_name = "Актау - КПП Тажен - Ашхабад" if "Тажен" in best["name"] else "Актау - КПП Карабогаз - Туркменбаши"
+        route_name = "Актау - Бейнеу - КПП Тажен - Даут-Ата" if "Тажен" in best["name"] else "Актау - КПП Карабогаз - Туркменбаши"
         return (
             f"Выбирайте маршрут {route_name}. Сейчас контрольная точка {best['name']}: "
             f"{best['wait_minutes']} мин ожидания, очередь {best['current_queue']} авто, загрузка {load_pct(best)}%."

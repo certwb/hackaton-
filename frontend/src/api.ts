@@ -2,10 +2,13 @@ import type {
   AiForecastResponse,
   Checkpoint,
   CheckpointDetails,
+  ChatbotResponse,
   DashboardData,
   Forecast,
   FreightRequestSummary,
   FreightResponse,
+  KpiStats,
+  RouteDeleteResponse,
   RouteLine,
 } from './types';
 
@@ -24,6 +27,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   checkpoints: () => request<Checkpoint[]>('/api/checkpoints'),
+  kpi: () => request<KpiStats>('/api/analytics/kpi'),
+  chatbot: (message: string) =>
+    request<ChatbotResponse>('/api/chatbot', {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }),
   dashboard: () => request<DashboardData>('/api/analytics/dashboard'),
   checkpointDetails: (id: number) => request<CheckpointDetails>(`/api/checkpoints/${id}/status`),
   checkpointForecast: (id: number) => request<Forecast>(`/api/checkpoints/${id}/forecast`),
@@ -33,6 +42,10 @@ export const api = {
     }),
   freightRequests: (limit = 10) => request<FreightRequestSummary[]>(`/api/freight-requests?limit=${limit}`),
   routes: () => request<RouteLine[]>('/api/routes'),
+  deleteRoute: (id: string) =>
+    request<RouteDeleteResponse>(`/api/routes/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
   createFreightRequest: (payload: {
     cargo_type: string;
     weight_tons: number;

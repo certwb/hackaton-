@@ -78,6 +78,15 @@ export interface AlertItem {
   message: string;
 }
 
+export interface KpiStats {
+  cargo_this_week_tons: number;
+  active_shipments: number;
+  avg_wait_minutes: number;
+  week_growth_pct: number;
+  active_checkpoints: number;
+  overloaded_checkpoints: number;
+}
+
 export interface DashboardData {
   generated_at: string;
   kpi: KpiItem[];
@@ -93,6 +102,11 @@ export interface RouteLine {
   mode: 'truck' | 'rail';
   distance_km: number;
   path: [number, number][];
+}
+
+export interface RouteDeleteResponse {
+  deleted: string;
+  routes: RouteLine[];
 }
 
 export interface FreightResponse {
@@ -133,4 +147,9 @@ export interface FreightRequestSummary {
   budget_kzt: number;
   via_checkpoint: string;
   created_at: string;
+}
+
+export interface ChatbotResponse {
+  reply: string;
+  provider?: 'anthropic' | 'gemini' | 'heuristic';
 }

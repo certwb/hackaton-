@@ -3,9 +3,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from './api';
 import { CheckpointPanel } from './components/CheckpointPanel';
 import { DashboardCharts } from './components/DashboardCharts';
+import { DriverChatbot } from './components/DriverChatbot';
 import { FreightForm } from './components/FreightForm';
-import { KpiBar } from './components/KpiBar';
+import { KpiCards } from './components/KpiCards';
+import { LiveBadge } from './components/LiveBadge';
 import { MangystauMap } from './components/MangystauMap';
+import { OverloadAlert } from './components/OverloadAlert';
+import { RouteAdvisor } from './components/RouteAdvisor';
+import { RouteManager } from './components/RouteManager';
+import { SavingsCalculator } from './components/SavingsCalculator';
+import { useCheckpoints } from './hooks/useCheckpoints';
 import type { Checkpoint, CheckpointDetails, DashboardData, RouteLine } from './types';
 
 function exportDashboard(data?: DashboardData) {
@@ -29,9 +36,7 @@ function exportDashboard(data?: DashboardData) {
 
 function useDashboardData() {
   const [dashboard, setDashboard] = useState<DashboardData>();
-  const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [routes, setRoutes] = useState<RouteLine[]>([]);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
@@ -39,15 +44,12 @@ function useDashboardData() {
     setLoading(true);
     setError(undefined);
     try {
-      const [dashboardResponse, checkpointsResponse, routesResponse] = await Promise.all([
+      const [dashboardResponse, routesResponse] = await Promise.all([
         api.dashboard(),
-        api.checkpoints(),
         api.routes(),
       ]);
       setDashboard(dashboardResponse);
-      setCheckpoints(checkpointsResponse);
       setRoutes(routesResponse);
-      setLastUpdate(new Date());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить API');
     } finally {
@@ -57,26 +59,28 @@ function useDashboardData() {
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(async () => {
-      try {
-        const response = await api.checkpoints();
-        setCheckpoints(response);
-        setLastUpdate(new Date());
-      } catch {
-        return;
-      }
-    }, 20000);
-    return () => window.clearInterval(timer);
   }, [load]);
 
-  return { dashboard, checkpoints, routes, lastUpdate, loading, error, reload: load };
+  const replaceRoutes = useCallback((nextRoutes: RouteLine[]) => {
+    setRoutes(nextRoutes);
+  }, []);
+
+  return { dashboard, routes, loading, error, reload: load, replaceRoutes };
 }
 
 export default function App() {
-  const { dashboard, checkpoints, routes, lastUpdate, loading, error, reload } = useDashboardData();
+  const { dashboard, routes, loading, error, reload: reloadDashboard, replaceRoutes } = useDashboardData();
+  const { checkpoints, lastUpdate, error: checkpointsError, reload: reloadCheckpoints } = useCheckpoints(15000);
   const [selectedId, setSelectedId] = useState<number>();
   const [details, setDetails] = useState<CheckpointDetails>();
   const [panelLoading, setPanelLoading] = useState(false);
+  const [deletingRouteId, setDeletingRouteId] = useState<string>();
+  const [routeActionError, setRouteActionError] = useState<string>();
+  const apiError = routeActionError || error || checkpointsError;
+
+  const reload = useCallback(async () => {
+    await Promise.all([reloadDashboard(), reloadCheckpoints()]);
+  }, [reloadDashboard, reloadCheckpoints]);
 
   const selectedCheckpoint = useMemo(
     () => checkpoints.find((checkpoint) => checkpoint.id === selectedId) || checkpoints[1] || checkpoints[0],
@@ -94,6 +98,23 @@ export default function App() {
     }
   }, []);
 
+  const deleteRoute = useCallback(
+    async (route: RouteLine) => {
+      if (!window.confirm(`Удалить маршрут "${route.name}"?`)) return;
+      setDeletingRouteId(route.id);
+      setRouteActionError(undefined);
+      try {
+        const response = await api.deleteRoute(route.id);
+        replaceRoutes(response.routes);
+      } catch (err) {
+        setRouteActionError(err instanceof Error ? err.message : 'Не удалось удалить маршрут');
+      } finally {
+        setDeletingRouteId(undefined);
+      }
+    },
+    [replaceRoutes],
+  );
+
   useEffect(() => {
     if (selectedCheckpoint && !selectedId) {
       loadCheckpoint(selectedCheckpoint);
@@ -101,72 +122,84 @@ export default function App() {
   }, [loadCheckpoint, selectedCheckpoint, selectedId]);
 
   return (
-    <main className="app min-h-screen">
-      <header className="topbar">
-        <div>
-          <span className="eyebrow">Mangystau Logistics Monitor</span>
-          <h1>Дашборд акимата и live-мониторинг КПП</h1>
-        </div>
-        <div className="topbar-actions">
-          <button className="secondary-button" type="button" onClick={reload} disabled={loading}>
-            <RefreshCw size={18} aria-hidden />
-            Обновить
-          </button>
-          <button className="primary-button" type="button" onClick={() => exportDashboard(dashboard)}>
-            <Download size={18} aria-hidden />
-            CSV
-          </button>
-        </div>
-      </header>
+    <div className="min-h-screen">
+      <OverloadAlert checkpoints={checkpoints} />
 
-      {error && (
-        <div className="api-error" role="alert">
-          API недоступен: {error}
-        </div>
-      )}
+      <main className="app min-h-screen">
+        <header className="topbar">
+          <div>
+            <span className="eyebrow">Mangystau Logistics Monitor</span>
+            <h1>Дашборд акимата и live-мониторинг КПП</h1>
+          </div>
+          <div className="topbar-actions">
+            <LiveBadge lastUpdate={lastUpdate} />
+            <button className="secondary-button" type="button" onClick={reload} disabled={loading}>
+              <RefreshCw size={18} aria-hidden />
+              Обновить
+            </button>
+            <button className="primary-button" type="button" onClick={() => exportDashboard(dashboard)}>
+              <Download size={18} aria-hidden />
+              CSV
+            </button>
+          </div>
+        </header>
 
-      <KpiBar items={dashboard?.kpi || []} />
+        {apiError && (
+          <div className="api-error" role="alert">
+            API недоступен: {apiError}
+          </div>
+        )}
 
-      <section className="main-grid">
-        <div className="left-column">
-          <MangystauMap
-            checkpoints={checkpoints}
-            routes={routes}
-            selectedId={selectedId}
-            lastUpdate={lastUpdate}
-            onSelect={loadCheckpoint}
-          />
-          <DashboardCharts weeklyVolume={dashboard?.weekly_volume || []} cargoMix={dashboard?.cargo_mix || []} />
-        </div>
-        <div className="right-column">
-          <CheckpointPanel
-            checkpoint={selectedCheckpoint}
-            details={details}
-            loading={panelLoading}
-            onRefresh={() => selectedCheckpoint && loadCheckpoint(selectedCheckpoint)}
-          />
-          <section className="panel alert-panel">
-            <div className="panel-head">
-              <h2>Оперативные алерты</h2>
-              <ShieldAlert size={20} aria-hidden />
+        <KpiCards />
+
+        <section className="main-grid">
+          <div className="left-column">
+            <div id="map">
+              <MangystauMap
+                checkpoints={checkpoints}
+                routes={routes}
+                selectedId={selectedId}
+                lastUpdate={lastUpdate}
+                onSelect={loadCheckpoint}
+              />
             </div>
-            {(dashboard?.alerts || []).length === 0 ? (
-              <p className="muted">Критичных очередей нет.</p>
-            ) : (
-              <ul className="alert-list">
-                {dashboard?.alerts.map((alert) => (
-                  <li key={alert.title}>
-                    <strong>{alert.title}</strong>
-                    <span>{alert.message}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
-      </section>
+            <DashboardCharts weeklyVolume={dashboard?.weekly_volume || []} cargoMix={dashboard?.cargo_mix || []} />
+          </div>
+          <div className="right-column">
+            <RouteManager routes={routes} deletingId={deletingRouteId} onDelete={deleteRoute} />
+            <RouteAdvisor />
+            <SavingsCalculator />
+            <CheckpointPanel
+              checkpoint={selectedCheckpoint}
+              details={details}
+              loading={panelLoading}
+              onRefresh={() => selectedCheckpoint && loadCheckpoint(selectedCheckpoint)}
+            />
+            <section className="panel alert-panel">
+              <div className="panel-head">
+                <h2>Оперативные алерты</h2>
+                <ShieldAlert size={20} aria-hidden />
+              </div>
+              {(dashboard?.alerts || []).length === 0 ? (
+                <p className="muted">Критичных очередей нет.</p>
+              ) : (
+                <ul className="alert-list">
+                  {dashboard?.alerts.map((alert) => (
+                    <li key={alert.title}>
+                      <strong>{alert.title}</strong>
+                      <span>{alert.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        </section>
 
-      <FreightForm />
-    </main>
+        <FreightForm />
+      </main>
+
+      <DriverChatbot />
+    </div>
   );
 }

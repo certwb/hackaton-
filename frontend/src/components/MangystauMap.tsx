@@ -41,6 +41,7 @@ export function MangystauMap({
         {routes.map((route) => (
           <Polyline
             key={route.id}
+            smoothFactor={0}
             pathOptions={{
               color: route.mode === 'rail' ? '#5b5f97' : '#0f8b8d',
               weight: route.mode === 'rail' ? 3 : 4,

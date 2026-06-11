@@ -8,6 +8,18 @@ const statusLabels = {
   critical: 'Критично',
 };
 
+const verifiedPositions: Array<{ match: string; position: [number, number] }> = [
+  { match: 'Порт Актау', position: [43.60049, 51.22873] },
+  { match: 'Темир-Баба', position: [41.924313, 52.661606] },
+  { match: 'Гарабогаз', position: [41.924313, 52.661606] },
+  { match: 'Карабогаз', position: [41.924313, 52.661606] },
+  { match: 'Тажен', position: [44.892222, 55.981944] },
+  { match: 'Мангистау', position: [43.696951, 51.308965] },
+  { match: 'Мангышлак', position: [43.696951, 51.308965] },
+  { match: 'Опорная', position: [46.20838, 54.47317] },
+  { match: 'Боранкул', position: [46.20838, 54.47317] },
+];
+
 function markerIcon(status: Checkpoint['status'], type: Checkpoint['type']) {
   return L.divIcon({
     className: `checkpoint-marker checkpoint-marker--${status} checkpoint-marker--${type}`,
@@ -16,6 +28,11 @@ function markerIcon(status: Checkpoint['status'], type: Checkpoint['type']) {
     iconAnchor: [9, 9],
     popupAnchor: [0, -9],
   });
+}
+
+function checkpointPosition(checkpoint: Checkpoint): [number, number] {
+  const verified = verifiedPositions.find((item) => checkpoint.name.includes(item.match));
+  return verified?.position ?? [checkpoint.lat, checkpoint.lon];
 }
 
 export function MangystauMap({
@@ -55,7 +72,7 @@ export function MangystauMap({
           <Marker
             key={checkpoint.id}
             icon={markerIcon(checkpoint.status, checkpoint.type)}
-            position={[checkpoint.lat, checkpoint.lon]}
+            position={checkpointPosition(checkpoint)}
             eventHandlers={{ click: () => onSelect(checkpoint) }}
           >
             <Popup>

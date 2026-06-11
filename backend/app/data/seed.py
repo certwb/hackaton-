@@ -283,9 +283,21 @@ def get_checkpoint_static(checkpoint_id: int) -> dict:
     raise KeyError(checkpoint_id)
 
 
+def checkpoint_static_fields(checkpoint: dict) -> dict:
+    return {k: v for k, v in checkpoint.items() if k != "base_queue"}
+
+
+def merge_live_state(checkpoint: dict, live_row: dict) -> dict:
+    row = checkpoint_static_fields(checkpoint)
+    for key in ("current_queue", "wait_minutes", "utilization", "status", "updated_at"):
+        if key in live_row:
+            row[key] = live_row[key]
+    return row
+
+
 def status_for(checkpoint: dict, moment: datetime | None = None) -> dict:
     if moment is None and checkpoint["id"] in LIVE_STATE:
-        return LIVE_STATE[checkpoint["id"]].copy()
+        return merge_live_state(checkpoint, LIVE_STATE[checkpoint["id"]])
 
     moment = moment or datetime.now()
     minute_bucket = moment.minute // 2
@@ -301,7 +313,7 @@ def status_for(checkpoint: dict, moment: datetime | None = None) -> dict:
     else:
         status = "open"
     return {
-        **{k: v for k, v in checkpoint.items() if k != "base_queue"},
+        **checkpoint_static_fields(checkpoint),
         "current_queue": queue,
         "wait_minutes": wait_minutes,
         "utilization": round(utilization, 2),
@@ -321,7 +333,7 @@ def set_live_checkpoint_status(checkpoint_id: int, queue: int, wait_minutes: int
     else:
         status = "open"
     row = {
-        **{k: v for k, v in checkpoint.items() if k != "base_queue"},
+        **checkpoint_static_fields(checkpoint),
         "current_queue": max(0, int(queue)),
         "wait_minutes": max(0, int(wait_minutes)),
         "utilization": round(utilization, 2),

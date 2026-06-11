@@ -239,12 +239,34 @@ h2 {
 .checkpoint-marker {
   display: grid;
   place-items: center;
-  border: 3px solid #fff;
+  border: 2px solid #fff;
   border-radius: 50%;
   color: #fff;
-  font-size: 15px;
-  font-weight: 900;
-  box-shadow: 0 10px 22px rgba(23, 32, 47, 0.28);
+  box-shadow: 0 8px 18px rgba(23, 32, 47, 0.26);
+}
+
+.checkpoint-marker span {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: inherit;
+  background: #fff;
+}
+
+.checkpoint-marker--land {
+  border-radius: 5px;
+}
+
+.checkpoint-marker--land span {
+  border-radius: 3px;
+}
+
+.checkpoint-marker--rail {
+  border-radius: 4px;
+}
+
+.checkpoint-marker--sea {
+  border-radius: 50%;
 }
 
 .checkpoint-marker--open {
@@ -257,7 +279,7 @@ h2 {
 
 .checkpoint-marker--critical {
   background: #e11d48;
-  animation: pulse 1.6s infinite;
+  animation: markerPulse 1.6s infinite;
 }
 
 .map-popup {
@@ -696,13 +718,13 @@ h2 {
   }
 }
 
-@keyframes pulse {
+@keyframes markerPulse {
   0%,
   100% {
-    transform: scale(1);
+    box-shadow: 0 8px 18px rgba(23, 32, 47, 0.26), 0 0 0 0 rgba(225, 29, 72, 0.32);
   }
   50% {
-    transform: scale(1.12);
+    box-shadow: 0 8px 18px rgba(23, 32, 47, 0.26), 0 0 0 8px rgba(225, 29, 72, 0);
   }
 }
 

@@ -9,13 +9,12 @@ const statusLabels = {
 };
 
 function markerIcon(status: Checkpoint['status'], type: Checkpoint['type']) {
-  const shape = type === 'sea' ? '●' : type === 'rail' ? '■' : '◆';
   return L.divIcon({
-    className: `checkpoint-marker checkpoint-marker--${status}`,
-    html: `<span>${shape}</span>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
-    popupAnchor: [0, -15],
+    className: `checkpoint-marker checkpoint-marker--${status} checkpoint-marker--${type}`,
+    html: '<span />',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    popupAnchor: [0, -9],
   });
 }
 

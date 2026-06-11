@@ -38,18 +38,15 @@ function useDashboardData() {
   const [dashboard, setDashboard] = useState<DashboardData>();
   const [routes, setRoutes] = useState<RouteLine[]>([]);
   const [loading, setLoading] = useState(true);
+  const [routesLoading, setRoutesLoading] = useState(false);
   const [error, setError] = useState<string>();
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(undefined);
     try {
-      const [dashboardResponse, routesResponse] = await Promise.all([
-        api.dashboard(),
-        api.routes(),
-      ]);
+      const dashboardResponse = await api.dashboard();
       setDashboard(dashboardResponse);
-      setRoutes(routesResponse);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось загрузить API');
     } finally {
@@ -65,11 +62,33 @@ function useDashboardData() {
     setRoutes(nextRoutes);
   }, []);
 
-  return { dashboard, routes, loading, error, reload: load, replaceRoutes };
+  const loadRoutes = useCallback(async () => {
+    setRoutesLoading(true);
+    setError(undefined);
+    try {
+      const routesResponse = await api.routes();
+      setRoutes(routesResponse);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось загрузить маршруты');
+    } finally {
+      setRoutesLoading(false);
+    }
+  }, []);
+
+  return { dashboard, routes, routesLoading, loading, error, reload: load, replaceRoutes, loadRoutes };
 }
 
 export default function App() {
-  const { dashboard, routes, loading, error, reload: reloadDashboard, replaceRoutes } = useDashboardData();
+  const {
+    dashboard,
+    routes,
+    routesLoading,
+    loading,
+    error,
+    reload: reloadDashboard,
+    replaceRoutes,
+    loadRoutes,
+  } = useDashboardData();
   const { checkpoints, lastUpdate, error: checkpointsError, reload: reloadCheckpoints } = useCheckpoints(15000);
   const [selectedId, setSelectedId] = useState<number>();
   const [details, setDetails] = useState<CheckpointDetails>();
@@ -166,7 +185,13 @@ export default function App() {
             <DashboardCharts weeklyVolume={dashboard?.weekly_volume || []} cargoMix={dashboard?.cargo_mix || []} />
           </div>
           <div className="right-column">
-            <RouteManager routes={routes} deletingId={deletingRouteId} onDelete={deleteRoute} />
+            <RouteManager
+              routes={routes}
+              deletingId={deletingRouteId}
+              loading={routesLoading}
+              onDelete={deleteRoute}
+              onShowRoutes={loadRoutes}
+            />
             <RouteAdvisor />
             <SavingsCalculator />
             <CheckpointPanel

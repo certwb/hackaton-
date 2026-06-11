@@ -1,14 +1,18 @@
-import { Loader2, MapPinned, Trash2 } from 'lucide-react';
+import { Eye, Loader2, MapPinned, Trash2 } from 'lucide-react';
 import type { RouteLine } from '../types';
 
 export function RouteManager({
   routes,
   deletingId,
+  loading,
   onDelete,
+  onShowRoutes,
 }: {
   routes: RouteLine[];
   deletingId?: string;
+  loading: boolean;
   onDelete: (route: RouteLine) => void;
+  onShowRoutes: () => void;
 }) {
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -18,7 +22,15 @@ export function RouteManager({
       </div>
 
       {routes.length === 0 ? (
-        <p className="text-sm text-gray-500">Активных маршрутов нет.</p>
+        <button
+          type="button"
+          onClick={onShowRoutes}
+          disabled={loading}
+          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="spin" size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
+          {loading ? 'Загружаем...' : 'Показать маршруты'}
+        </button>
       ) : (
         <div className="grid gap-2">
           {routes.map((route) => {

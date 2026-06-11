@@ -95,9 +95,11 @@ export default function App() {
   const [panelLoading, setPanelLoading] = useState(false);
   const [deletingRouteId, setDeletingRouteId] = useState<string>();
   const [routeActionError, setRouteActionError] = useState<string>();
+  const [routesVisible, setRoutesVisible] = useState(false);
   const apiError = routeActionError || error || checkpointsError;
 
   const reload = useCallback(async () => {
+    setRoutesVisible(false);
     await Promise.all([reloadDashboard(), reloadCheckpoints()]);
   }, [reloadDashboard, reloadCheckpoints]);
 
@@ -133,6 +135,11 @@ export default function App() {
     },
     [replaceRoutes],
   );
+
+  const showRoutes = useCallback(async () => {
+    await loadRoutes();
+    setRoutesVisible(true);
+  }, [loadRoutes]);
 
   useEffect(() => {
     if (selectedCheckpoint && !selectedId) {
@@ -176,7 +183,7 @@ export default function App() {
             <div id="map">
               <MangystauMap
                 checkpoints={checkpoints}
-                routes={routes}
+                routes={routesVisible ? routes : []}
                 selectedId={selectedId}
                 lastUpdate={lastUpdate}
                 onSelect={loadCheckpoint}
@@ -187,10 +194,11 @@ export default function App() {
           <div className="right-column">
             <RouteManager
               routes={routes}
+              visible={routesVisible}
               deletingId={deletingRouteId}
               loading={routesLoading}
               onDelete={deleteRoute}
-              onShowRoutes={loadRoutes}
+              onShowRoutes={showRoutes}
             />
             <RouteAdvisor />
             <SavingsCalculator />

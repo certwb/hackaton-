@@ -3,12 +3,14 @@ import type { RouteLine } from '../types';
 
 export function RouteManager({
   routes,
+  visible,
   deletingId,
   loading,
   onDelete,
   onShowRoutes,
 }: {
   routes: RouteLine[];
+  visible: boolean;
   deletingId?: string;
   loading: boolean;
   onDelete: (route: RouteLine) => void;
@@ -21,7 +23,7 @@ export function RouteManager({
         <MapPinned size={20} className="text-teal-700" aria-hidden />
       </div>
 
-      {routes.length === 0 ? (
+      {!visible ? (
         <button
           type="button"
           onClick={onShowRoutes}
@@ -31,6 +33,8 @@ export function RouteManager({
           {loading ? <Loader2 className="spin" size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
           {loading ? 'Загружаем...' : 'Показать маршруты'}
         </button>
+      ) : routes.length === 0 ? (
+        <p className="text-sm text-gray-500">Активных маршрутов нет.</p>
       ) : (
         <div className="grid gap-2">
           {routes.map((route) => {

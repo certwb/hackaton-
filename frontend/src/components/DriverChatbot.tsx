@@ -1,6 +1,7 @@
 import { Bot, Loader2, MessageCircle, Send, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
+import type { Checkpoint } from '../types';
 
 interface Message {
   role: 'user' | 'bot';
@@ -8,6 +9,17 @@ interface Message {
 }
 
 const QUICK = ['Какой КПП сейчас свободнее?', 'Сколько ждать на Карабогазе?', 'Когда лучше ехать сегодня?'];
+
+function localCheckpointReply(checkpoints: Checkpoint[]) {
+  const land = checkpoints.filter((checkpoint) => checkpoint.type === 'land');
+  const candidates = land.length > 0 ? land : checkpoints;
+  const best = [...candidates].sort((a, b) => a.wait_minutes - b.wait_minutes || a.current_queue - b.current_queue)[0];
+  if (!best) {
+    return 'API чата временно недоступен, и данные КПП не загрузились. Проверьте backend-деплой и переменную VITE_API_URL.';
+  }
+  const action = best.wait_minutes < 60 ? 'можно ехать сейчас' : 'лучше выезжать позже, когда очередь спадет';
+  return `AI временно недоступен, показываю расчет по live-данным: оптимально через ${best.name}. Очередь ${best.current_queue} авто, ожидание около ${best.wait_minutes} мин — ${action}.`;
+}
 
 export function DriverChatbot() {
   const [open, setOpen] = useState(false);
@@ -31,8 +43,20 @@ export function DriverChatbot() {
     try {
       const data = await api.chatbot(q);
       setMsgs((items) => [...items, { role: 'bot', text: data.reply }]);
-    } catch {
-      setMsgs((items) => [...items, { role: 'bot', text: 'Ошибка связи. Попробуй снова.' }]);
+    } catch (err) {
+      console.error(err);
+      try {
+        const checkpoints = await api.checkpoints();
+        setMsgs((items) => [...items, { role: 'bot', text: localCheckpointReply(checkpoints) }]);
+      } catch {
+        setMsgs((items) => [
+          ...items,
+          {
+            role: 'bot',
+            text: 'Backend API недоступен. Если frontend и backend на разных доменах, добавьте VITE_API_URL с адресом backend и redeploy.',
+          },
+        ]);
+      }
     } finally {
       setLoading(false);
     }

@@ -182,6 +182,8 @@ def find_checkpoint_by_message(message: str, checkpoints: list[dict]) -> dict | 
     aliases = {
         "карабогаз": "Карабогаз",
         "karabogaz": "Карабогаз",
+        "темир": "Темир",
+        "temir": "Темир",
         "тажен": "Тажен",
         "tazhen": "Тажен",
         "порт": "Порт",
@@ -238,7 +240,7 @@ def exact_chat_reply(message: str, checkpoints: list[dict]) -> str | None:
 
     if "маршрут" in text:
         best = min(candidates, key=lambda row: (row["wait_minutes"], row["current_queue"]))
-        route_name = "Актау - Бейнеу - КПП Тажен - Даут-Ата" if "Тажен" in best["name"] else "Актау - КПП Карабогаз - Туркменбаши"
+        route_name = "Актау - Бейнеу - КПП Тажен - Даут-Ата" if "Тажен" in best["name"] else "Актау - КПП Темир-Баба / Гарабогаз - Туркменбаши"
         return (
             f"Выбирайте маршрут {route_name}. Сейчас контрольная точка {best['name']}: "
             f"{best['wait_minutes']} мин ожидания, очередь {best['current_queue']} авто, загрузка {load_pct(best)}%."

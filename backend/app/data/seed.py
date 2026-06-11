@@ -9,56 +9,77 @@ LIVE_STATE: dict[int, dict] = {}
 LIVE_LOG: dict[int, list[dict]] = {}
 
 
+POINTS = {
+    "aktau_port": (43.60049, 51.22873),
+    "temir_baba": (41.924313, 52.661606),
+    "tazhen": (44.892222, 55.981944),
+    "mangistau_station": (43.696951, 51.308965),
+    "opornaya_station": (46.20838, 54.47317),
+}
+
+
+def point(name: str) -> tuple[float, float]:
+    return POINTS[name]
+
+
+def point_lat(name: str) -> float:
+    return POINTS[name][0]
+
+
+def point_lon(name: str) -> float:
+    return POINTS[name][1]
+
+
 CHECKPOINTS = [
     {
         "id": 1,
         "name": "Порт Актау",
         "type": "sea",
-        "lat": 43.6529,
-        "lon": 51.1722,
+        "lat": point_lat("aktau_port"),
+        "lon": point_lon("aktau_port"),
         "capacity_per_hour": 120,
         "base_queue": 28,
         "note": "Единственный морской порт Казахстана на Каспии",
     },
     {
         "id": 2,
-        "name": "КПП Карабогаз",
+        "name": "КПП Темир-Баба / Гарабогаз",
         "type": "land",
-        "lat": 41.5667,
-        "lon": 52.5333,
+        "lat": point_lat("temir_baba"),
+        "lon": point_lon("temir_baba"),
         "capacity_per_hour": 40,
         "base_queue": 45,
-        "note": "Граница с Туркменистаном, основной южный КПП",
+        "note": "Граница с Туркменистаном, сопредельный пункт Гарабогаз",
     },
     {
         "id": 3,
-        "name": "КПП Тажен",
+        "name": "КПП Тажен / Даут-Ата",
         "type": "land",
-        "lat": 44.8922,
-        "lon": 55.9819,
+        "lat": point_lat("tazhen"),
+        "lon": point_lon("tazhen"),
         "capacity_per_hour": 30,
         "base_queue": 16,
         "note": "Граница с Узбекистаном, направление Даут-Ата / Каракалпакстан",
     },
     {
         "id": 4,
-        "name": "Ж/д ст. Мангышлак",
+        "name": "Ж/д ст. Мангистау / Мангышлак",
         "type": "rail",
-        "lat": 43.7900,
-        "lon": 51.2300,
+        "lat": point_lat("mangistau_station"),
+        "lon": point_lon("mangistau_station"),
         "capacity_per_hour": 15,
         "base_queue": 8,
-        "note": "Основная ж/д станция региона",
+        "note": "Основная железнодорожная станция рядом с Актау",
     },
     {
         "id": 5,
-        "name": "Ж/д ст. Опорная",
+        "name": "Ж/д ст. Опорная / Боранкул",
         "type": "rail",
-        "lat": 43.6400,
-        "lon": 51.0800,
+        "lat": point_lat("opornaya_station"),
+        "lon": point_lon("opornaya_station"),
         "capacity_per_hour": 10,
         "base_queue": 6,
-        "note": "Сортировочная станция у порта",
+        "note": "Железнодорожная станция Опорная в районе Боранкула",
     },
 ]
 
@@ -146,13 +167,11 @@ CARRIERS = [
 ROUTES = [
     {
         "id": "aktau-karabogaz",
-        "name": "Актау - КПП Карабогаз - Туркменбаши",
+        "name": "Актау - КПП Темир-Баба / Гарабогаз - Туркменбаши",
         "mode": "truck",
         "distance_km": 350,
         "path": [
-            [43.6529, 51.1722],
-            [43.6500, 51.2350],
-            [43.6350, 51.3150],
+            point("aktau_port"),
             [43.6100, 51.3900],
             [43.6200, 51.4500],
             [43.5400, 51.5550],
@@ -166,10 +185,8 @@ ROUTES = [
             [42.6400, 52.3950],
             [42.4300, 52.4450],
             [42.1800, 52.4850],
-            [41.9300, 52.5200],
-            [41.7200, 52.5450],
-            [41.6300, 52.5380],
-            [41.5667, 52.5333],
+            [42.0200, 52.5600],
+            point("temir_baba"),
         ],
     },
     {
@@ -178,7 +195,8 @@ ROUTES = [
         "mode": "truck",
         "distance_km": 557,
         "path": [
-            [43.6529, 51.1722],
+            point("aktau_port"),
+            point("mangistau_station"),
             [43.7600, 51.3500],
             [44.0000, 51.8500],
             [44.2600, 52.3800],
@@ -190,18 +208,19 @@ ROUTES = [
             [45.2500, 55.4200],
             [45.1200, 55.6500],
             [45.0000, 55.8200],
-            [44.8922, 55.9819],
+            point("tazhen"),
         ],
     },
     {
         "id": "port-mangyshlak",
-        "name": "Порт Актау - Мангышлак - ТМТМ",
+        "name": "Порт Актау - ст. Мангистау / Мангышлак - ТМТМ",
         "mode": "rail",
         "distance_km": 24,
         "path": [
-            [43.6529, 51.1722],
-            [43.7000, 51.2000],
-            [43.7900, 51.2300],
+            point("aktau_port"),
+            [43.6200, 51.2450],
+            [43.6500, 51.2700],
+            point("mangistau_station"),
         ],
     },
 ]

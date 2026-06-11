@@ -10,7 +10,7 @@ interface Message {
 
 const QUICK = [
   'Какой КПП сейчас свободнее?',
-  'Сколько ждать на Карабогазе?',
+  'Сколько ждать на Темир-Баба?',
   'Когда лучше ехать сегодня?',
   'Есть ли перегрузка?',
   'Какой маршрут выбрать?',
@@ -24,6 +24,8 @@ function findCheckpoint(question: string, checkpoints: Checkpoint[]) {
   const aliases = [
     ['карабогаз', 'Карабогаз'],
     ['karabogaz', 'Карабогаз'],
+    ['темир', 'Темир'],
+    ['temir', 'Темир'],
     ['тажен', 'Тажен'],
     ['tazhen', 'Тажен'],
     ['порт', 'Порт'],
@@ -95,7 +97,7 @@ function localCheckpointReply(question: string, checkpoints: Checkpoint[]) {
   }
 
   if (text.includes('маршрут')) {
-    const routeName = best.name.includes('Тажен') ? 'Актау - Бейнеу - КПП Тажен - Даут-Ата' : 'Актау - КПП Карабогаз - Туркменбаши';
+    const routeName = best.name.includes('Тажен') ? 'Актау - Бейнеу - КПП Тажен - Даут-Ата' : 'Актау - КПП Темир-Баба / Гарабогаз - Туркменбаши';
     return `Выбирайте маршрут ${routeName}. Сейчас контрольная точка ${best.name}: ${best.wait_minutes} мин ожидания, очередь ${best.current_queue} авто, загрузка ${loadPct(best)}%.`;
   }
 

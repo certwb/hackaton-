@@ -89,9 +89,10 @@ export function FreightForm() {
           <select value={viaCheckpoint} onChange={(event) => setViaCheckpoint(event.target.value)}>
             <option value="">Любой КПП</option>
             <option>Порт Актау</option>
-            <option>КПП Карабогаз</option>
-            <option>КПП Тажен</option>
-            <option>Ж/д Мангышлак</option>
+            <option>КПП Темир-Баба / Гарабогаз</option>
+            <option>КПП Тажен / Даут-Ата</option>
+            <option>Ж/д ст. Мангистау / Мангышлак</option>
+            <option>Ж/д ст. Опорная / Боранкул</option>
           </select>
         </label>
         <label>
@@ -150,4 +151,3 @@ export function FreightForm() {
     </section>
   );
 }
-

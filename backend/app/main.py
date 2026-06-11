@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 
+from app import db as app_db
 from app.data.seed import (
     CARRIERS,
     CHECKPOINTS,
@@ -93,7 +94,14 @@ CHAT_SYSTEM = """Ты — помощник водителя-дальнобойщ
 
 @app.on_event("startup")
 async def startup() -> None:
+    if await app_db.connect_database():
+        DELETED_ROUTE_IDS.update(await app_db.list_deleted_route_ids())
     asyncio.create_task(simulate_realtime(interval_seconds=20))
+
+
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    await app_db.disconnect_database()
 
 
 def parse_period(period: str) -> int:
@@ -385,6 +393,11 @@ async def chatbot_health() -> dict:
     }
 
 
+@app.get("/api/db/health")
+async def db_health() -> dict:
+    return await app_db.health()
+
+
 @app.post("/api/chatbot")
 async def chat(req: ChatRequest) -> ChatResponse:
     checkpoints = current_checkpoints()
@@ -450,6 +463,8 @@ async def get_carriers(specialization: str | None = None) -> list[dict]:
 
 @app.get("/api/freight-requests")
 async def get_freight_requests(limit: int = Query(10, ge=1, le=50)) -> list[dict]:
+    if app_db.database_enabled():
+        return await app_db.list_freight_requests(limit)
     return FREIGHT_REQUESTS[-limit:][::-1]
 
 
@@ -458,32 +473,39 @@ async def create_freight_request(payload: FreightRequestIn) -> dict:
     request_id = int(datetime.now().timestamp() * 1000)
     recommended_route = route_recommendation(payload.cargo_type, payload.delivery_loc or "")
     created_at = datetime.now().isoformat(timespec="seconds")
+    top_carriers = carrier_matches(payload.cargo_type)
     response = {
         "id": request_id,
         "status": "open",
         "created_at": created_at,
         "request": payload.model_dump(mode="json"),
         "recommended_route": recommended_route,
-        "top_carriers": carrier_matches(payload.cargo_type),
+        "top_carriers": top_carriers,
         "sms_preview": "Заявка отправлена топ-3 перевозчикам: ожидайте отклик до 20 минут.",
     }
-    FREIGHT_REQUESTS.append(
-        {
-            "id": request_id,
-            "status": "open",
-            "cargo_type": payload.cargo_type,
-            "weight_tons": payload.weight_tons,
-            "pickup": payload.pickup_location,
-            "pickup_location": payload.pickup_location,
-            "delivery": payload.delivery_loc,
-            "delivery_loc": payload.delivery_loc,
-            "desired_date": payload.desired_date.isoformat(),
-            "budget_kzt": payload.budget_kzt,
-            "via_checkpoint": payload.via_checkpoint or recommended_route["checkpoint_name"],
-            "created_at": created_at,
-        }
-    )
-    del FREIGHT_REQUESTS[:-50]
+    summary = {
+        "id": request_id,
+        "status": "open",
+        "cargo_type": payload.cargo_type,
+        "weight_tons": payload.weight_tons,
+        "pickup": payload.pickup_location,
+        "pickup_location": payload.pickup_location,
+        "delivery": payload.delivery_loc,
+        "delivery_loc": payload.delivery_loc,
+        "desired_date": payload.desired_date.isoformat(),
+        "budget_kzt": payload.budget_kzt,
+        "via_checkpoint": payload.via_checkpoint or recommended_route["checkpoint_name"],
+        "created_at": created_at,
+        "request": payload.model_dump(mode="json"),
+        "recommended_route": recommended_route,
+        "top_carriers": top_carriers,
+    }
+    db_id = await app_db.create_freight_request(summary)
+    if db_id is not None:
+        response["id"] = db_id
+    else:
+        FREIGHT_REQUESTS.append(summary)
+        del FREIGHT_REQUESTS[:-50]
     return response
 
 
@@ -601,6 +623,7 @@ async def delete_route(route_id: str) -> dict:
     if route is None:
         raise HTTPException(status_code=404, detail="Route not found")
     DELETED_ROUTE_IDS.add(route_id)
+    await app_db.save_deleted_route(route_id)
     return {
         "deleted": route_id,
         "routes": visible_routes("all"),

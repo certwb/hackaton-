@@ -50,16 +50,25 @@ CREATE TABLE IF NOT EXISTS carriers (
 );
 
 CREATE TABLE IF NOT EXISTS freight_requests (
-  id SERIAL PRIMARY KEY,
+  id BIGSERIAL PRIMARY KEY,
+  status VARCHAR(20) DEFAULT 'open',
   cargo_type VARCHAR(50),
   weight_tons DECIMAL(10,2),
   pickup_location VARCHAR(200),
   delivery_loc VARCHAR(200),
   desired_date DATE,
   budget_kzt DECIMAL(14,2),
-  status VARCHAR(20) DEFAULT 'open',
+  via_checkpoint VARCHAR(200),
+  request JSONB DEFAULT '{}'::jsonb,
+  recommended_route JSONB DEFAULT '{}'::jsonb,
+  top_carriers JSONB DEFAULT '[]'::jsonb,
   carrier_id INT REFERENCES carriers(id),
   created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS deleted_routes (
+  route_id TEXT PRIMARY KEY,
+  deleted_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS checkpoint_load_log (
@@ -73,4 +82,4 @@ CREATE TABLE IF NOT EXISTS checkpoint_load_log (
 
 CREATE INDEX IF NOT EXISTS idx_checkpoints_geom ON checkpoints USING GIST (geom);
 CREATE INDEX IF NOT EXISTS idx_checkpoint_load_log_time ON checkpoint_load_log (checkpoint_id, logged_at DESC);
-
+CREATE INDEX IF NOT EXISTS idx_freight_requests_created_at ON freight_requests (created_at DESC);
